@@ -10,11 +10,11 @@
         label { font-weight: 600; color: #4b5563; display: block; margin-top: 15px; }
         input, select, button { width: 100%; margin: 10px 0; padding: 12px; border-radius: 8px; border: 1px solid #ddd; box-sizing: border-box; }
         
-        /* כפתורים וורודים רגילים */
+        /* Standard pink buttons */
         .pink-btn { background-color: #f472b6; color: white; border: none; cursor: pointer; transition: 0.3s; }
         .pink-btn:hover { background-color: #ec4899; }
         
-        /* כפתורים כחולים להצעות */
+        /* Blue buttons for suggestions */
         .suggestion-btn { background-color: #2c3e50; color: white; padding: 10px; margin: 5px 0; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; width: 100%; }
         .suggestion-btn:hover { background-color: #34495e; }
         
@@ -188,7 +188,7 @@ function predict() {
 
     if (!selectedTconst) { showError(movieSearch, "Movie is required!"); isValid = false; }
     if (!year.value) { showError(year, "Year is required!"); isValid = false; }
-    // הבדיקה המעודכנת: רק גדול מ-0
+    // Runtime check: greater than 0
     if (runtime.value === "" || runtime.value <= 0) { showError(runtime, "Valid runtime (greater than 0) is required!"); isValid = false; }
     
     if (!isValid) return;
