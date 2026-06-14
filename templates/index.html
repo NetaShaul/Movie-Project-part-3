@@ -10,11 +10,10 @@
         label { font-weight: 600; color: #4b5563; display: block; margin-top: 15px; }
         input, select, button { width: 100%; margin: 10px 0; padding: 12px; border-radius: 8px; border: 1px solid #ddd; box-sizing: border-box; }
         
-        /* Standard pink buttons */
         .pink-btn { background-color: #f472b6; color: white; border: none; cursor: pointer; transition: 0.3s; }
         .pink-btn:hover { background-color: #ec4899; }
+        .pink-btn:disabled { background-color: #fbcfe8; cursor: not-allowed; }
         
-        /* Blue buttons for suggestions */
         .suggestion-btn { background-color: #2c3e50; color: white; padding: 10px; margin: 5px 0; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; width: 100%; }
         .suggestion-btn:hover { background-color: #34495e; }
         
@@ -36,7 +35,7 @@
     <h1>Movie Rating Predictor</h1>
 
     <label>Movie Name:</label>
-    <input type="text" id="movieSearch" placeholder="Type movie name..." onblur="checkMovieMatch()">
+    <input type="text" id="movieSearch" placeholder="Type movie name..." onblur="checkMovieMatch()" oninput="validateMovieName(this)">
     <div id="suggestionBox"></div>
 
     <label>Release Year:</label>
@@ -45,7 +44,7 @@
     </select>
 
     <label>Runtime (minutes):</label>
-    <input type="number" id="runtimeMinutes" placeholder="Enter movie runtime...">
+    <input type="number" id="runtimeMinutes" placeholder="Enter movie runtime (1-400)...">
 
     <label>Genres:</label>
     <div class="dropdown-wrapper">
@@ -83,11 +82,20 @@ let selectedTconst = null, selectedGenres = [], selectedDirectorIds = [];
 let allGenres = [], allDirectors = [];
 let debounceTimer;
 
+// Update: Range from 1890 to 2026
 const yearSelect = document.getElementById('yearSelect');
 for (let i = 2026; i >= 1890; i--) {
     let opt = document.createElement('option');
     opt.value = i; opt.innerHTML = i;
     yearSelect.appendChild(opt);
+}
+
+function validateMovieName(input) {
+    const regex = /[^a-zA-Z0-9\s.,!?'":-]/g;
+    if (regex.test(input.value)) {
+        input.value = input.value.replace(regex, "");
+        alert("Please use English characters and numbers only for movie names.");
+    }
 }
 
 document.addEventListener('click', e => {
@@ -188,18 +196,31 @@ function predict() {
 
     if (!selectedTconst) { showError(movieSearch, "Movie is required!"); isValid = false; }
     if (!year.value) { showError(year, "Year is required!"); isValid = false; }
-    // Runtime check: greater than 0
-    if (runtime.value === "" || runtime.value <= 0) { showError(runtime, "Valid runtime (greater than 0) is required!"); isValid = false; }
+    
+    // Updated Runtime check: 1 to 400 minutes
+    if (runtime.value === "" || runtime.value <= 0 || runtime.value > 400) { 
+        showError(runtime, "Valid runtime (1-400 minutes) is required!"); 
+        isValid = false; 
+    }
     
     if (!isValid) return;
 
+    const resultDiv = document.getElementById('result');
+    resultDiv.innerText = "Analyzing data... please wait...";
+    resultDiv.style.color = "#db2777";
+    document.getElementById('predictBtn').disabled = true;
+    
     let missing = [];
     if (selectedGenres.length === 0) missing.push("genre");
     if (selectedDirectorIds.length === 0) missing.push("director");
     
     if (missing.length > 0) {
         let msg = "Are you sure the " + missing.join(" and ") + " is unknown?";
-        if (!confirm(msg)) return;
+        if (!confirm(msg)) {
+            resultDiv.innerText = "";
+            document.getElementById('predictBtn').disabled = false;
+            return;
+        }
     }
     
     fetch('/predict', {
@@ -215,13 +236,15 @@ function predict() {
     })
     .then(r => r.ok ? r.json() : r.json().then(e => { throw new Error(e.error); }))
     .then(res => {
-        document.getElementById('result').innerText = "Predicted Rating: " + res.predicted_rating.toFixed(3) + "/10";
+        resultDiv.innerText = "Predicted Rating: " + res.predicted_rating.toFixed(3) + "/10";
+        resultDiv.style.color = "black";
         document.getElementById('predictBtn').style.display = 'none';
         document.getElementById('resetBtn').style.display = 'block';
     })
     .catch(err => {
-        document.getElementById('result').style.color = "red";
-        document.getElementById('result').innerText = "Error: " + err.message;
+        resultDiv.style.color = "red";
+        resultDiv.innerText = "Error: " + err.message;
+        document.getElementById('predictBtn').disabled = false;
     });
 }
 
