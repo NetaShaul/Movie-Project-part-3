@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+    <meta charset="UTF-8">
+    <title>Movie Rating Prediction</title>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; background-color: #fff5f7; padding: 40px; text-align: center; }
+        .card { background: white; padding: 40px; border-radius: 20px; box-shadow: 0 10px 25px rgba(244, 114, 182, 0.15); display: inline-block; width: 400px; text-align: left; }
+        h1 { color: #db2777; text-align: center; }
+        label { font-weight: 600; color: #4b5563; display: block; margin-top: 15px; }
+        input, select, button { width: 100%; margin: 10px 0; padding: 12px; border-radius: 8px; border: 1px solid #ddd; box-sizing: border-box; }
+        
+        /* כפתורים וורודים רגילים */
+        .pink-btn { background-color: #f472b6; color: white; border: none; cursor: pointer; transition: 0.3s; }
+        .pink-btn:hover { background-color: #ec4899; }
+        
+        /* כפתורים כחולים להצעות */
+        .suggestion-btn { background-color: #2c3e50; color: white; padding: 10px; margin: 5px 0; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; width: 100%; }
+        .suggestion-btn:hover { background-color: #34495e; }
+        
+        #suggestionBox { margin-top: 10px; }
+        .dropdown-wrapper { position: relative; }
+        .container-box { border: 1px solid #ddd; padding: 8px; border-radius: 8px; background: white; cursor: text; min-height: 45px; }
+        .tag { background: #ffe4e6; padding: 3px 8px; border-radius: 5px; font-size: 13px; display: inline-block; margin: 2px; }
+        .remove-tag { margin-left: 8px; cursor: pointer; color: red; font-weight: bold; }
+        #genreList, #directorList { display: none; position: absolute; top: 100%; left: 0; width: 100%; background: white; border: 1px solid #ddd; border-radius: 8px; max-height: 150px; overflow-y: auto; z-index: 1000; padding: 5px; }
+        .genre-item { padding: 8px; cursor: pointer; border-bottom: 1px solid #f0f0f0; }
+        .genre-item:hover { background-color: #f0f0f0; }
+        #result { font-weight: bold; margin-top: 15px; padding: 10px; border-radius: 8px; text-align: center; }
+        .error-message { color: red; font-size: 12px; display: block; margin-top: -5px; margin-bottom: 10px; }
+    </style>
+</head>
+
+<body>
+<div class="card">
+    <h1>Movie Rating Predictor</h1>
+
+    <label>Movie Name:</label>
+    <input type="text" id="movieSearch" placeholder="Type movie name..." onblur="checkMovieMatch()">
+    <div id="suggestionBox"></div>
+
+    <label>Release Year:</label>
+    <select id="yearSelect">
+        <option value="">-- Select Year --</option>
+    </select>
+
+    <label>Runtime (minutes):</label>
+    <input type="number" id="runtimeMinutes" placeholder="Enter movie runtime...">
+
+    <label>Genres:</label>
+    <div class="dropdown-wrapper">
+        <div id="genreContainer" class="container-box" onclick="document.getElementById('genreSearch').focus(); document.getElementById('genreList').style.display='block'">
+            <div id="selectedTags"></div>
+            <input type="text" id="genreSearch" placeholder="Select genres..." onkeyup="filterGenres()">
+        </div>
+        <div id="genreList">
+            <div class="genre-item" onclick="toggleOther()"><strong>+ Add custom genre</strong></div>
+            <input type="text" id="otherGenreInput" placeholder="Enter new genre..." style="display: none; width: 90%; margin: 5px;" onblur="addOtherGenre()">
+            <div id="genreOptions"></div>
+        </div>
+    </div>
+
+    <label>Directors:</label>
+    <div class="dropdown-wrapper">
+        <div id="directorContainer" class="container-box" onclick="document.getElementById('directorSearch').focus(); document.getElementById('directorList').style.display='block'">
+            <div id="selectedDirectors"></div>
+            <input type="text" id="directorSearch" placeholder="Search director..." oninput="filterDirectors()">
+        </div>
+        <div id="directorList">
+            <div class="genre-item" onclick="toggleDirectorInput()"><strong>+ Add custom director</strong></div>
+            <input type="text" id="otherDirectorInput" placeholder="Enter director name..." style="display: none; width: 90%; margin: 5px;" onblur="addCustomDirector()">
+            <div id="directorOptions"></div>
+        </div>
+    </div>
+
+    <button class="pink-btn" id="predictBtn" onclick="predict()">Predict Rating</button>
+    <h2 id="result"></h2>
+    <button class="pink-btn" id="resetBtn" style="display:none; background:#7f8c8d;" onclick="location.reload()">Predict Another Movie</button>
+</div>
+
+<script>
+let selectedTconst = null, selectedGenres = [], selectedDirectorIds = [];
+let allGenres = [], allDirectors = [];
+let debounceTimer;
+
+const yearSelect = document.getElementById('yearSelect');
+for (let i = 2026; i >= 1890; i--) {
+    let opt = document.createElement('option');
+    opt.value = i; opt.innerHTML = i;
+    yearSelect.appendChild(opt);
+}
+
+document.addEventListener('click', e => {
+    if (!e.target.closest('.dropdown-wrapper')) {
+        document.getElementById('genreList').style.display = 'none';
+        document.getElementById('directorList').style.display = 'none';
+    }
+});
+
+fetch('/get_genres').then(r => r.json()).then(g => { allGenres = g; renderGenres(g); });
+fetch('/get_directors').then(r => r.json()).then(d => { allDirectors = d; });
+
+function checkMovieMatch() {
+    const movieName = document.getElementById('movieSearch').value;
+    if (!movieName) return;
+    fetch('/check_movie', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({movie_name: movieName})
+    })
+    .then(r => r.json())
+    .then(res => {
+        let html = "<strong>Did you mean:</strong><br>";
+        if (res.status === "need_confirmation") {
+            html += res.options.map(o => 
+                `<button class="suggestion-btn" onclick="selectMovie('${o.name}', ${o.year}, '${o.tconst}')">${o.name} (${o.year})</button>`
+            ).join("");
+        }
+        html += `<button class="suggestion-btn" onclick='continueWithCustom(${JSON.stringify(movieName)})'>Continue with: ${movieName}</button>`;
+        document.getElementById('suggestionBox').innerHTML = html;
+    });
+}
+
+function selectMovie(name, year, tconst) {
+    document.getElementById('movieSearch').value = name;
+    document.getElementById('yearSelect').value = year;
+    selectedTconst = tconst;
+    document.getElementById('suggestionBox').innerHTML = `<span style="color: green;">✔ Selected: ${name}</span>`;
+}
+
+function continueWithCustom(name) {
+    selectedTconst = 'tt_dummy';
+    document.getElementById('suggestionBox').innerHTML = `<span style="color: orange;">✔ Proceeding with: ${name}</span>`;
+}
+
+function renderGenres(genres) { document.getElementById('genreOptions').innerHTML = genres.map(g => `<div class="genre-item" onclick="addGenre('${g}')">${g}</div>`).join(''); }
+function filterGenres() { const term = document.getElementById('genreSearch').value.toLowerCase(); renderGenres(allGenres.filter(g => g.toLowerCase().includes(term))); }
+function addGenre(g) { selectedGenres.push(g); renderTags(); document.getElementById('genreList').style.display = 'none'; }
+function renderTags() { document.getElementById('selectedTags').innerHTML = selectedGenres.map(g => `<span class="tag">${g} <span class="remove-tag" onclick="removeGenre('${g}')">&times;</span></span>`).join(''); }
+function removeGenre(g) { selectedGenres = selectedGenres.filter(x => x !== g); renderTags(); }
+function toggleOther() { document.getElementById('otherGenreInput').style.display = 'block'; document.getElementById('otherGenreInput').focus(); }
+function addOtherGenre() { const val = document.getElementById('otherGenreInput').value; if(val) addGenre(val); document.getElementById('otherGenreInput').style.display = 'none'; }
+
+function toggleDirectorInput() { document.getElementById('otherDirectorInput').style.display = 'block'; document.getElementById('otherDirectorInput').focus(); }
+function addCustomDirector() {
+    const input = document.getElementById('otherDirectorInput');
+    const name = input.value.trim();
+    if (name) {
+        const id = 'custom_' + name.replace(/\s+/g, '_');
+        if (!allDirectors.find(d => d.id === id)) allDirectors.push({ id, name });
+        addDirector(id, name);
+    }
+    input.value = ''; input.style.display = 'none';
+}
+function renderDirectors(dirs) {
+    document.getElementById('directorOptions').innerHTML = dirs.slice(0, 20).map(d => `<div class="genre-item" onclick="addDirector('${d.id}', '${d.name}')">${d.name}</div>`).join('');
+}
+function filterDirectors() {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(() => {
+        const term = document.getElementById('directorSearch').value.toLowerCase();
+        if (term === "") { document.getElementById('directorOptions').innerHTML = ""; return; }
+        const filtered = allDirectors.filter(d => d.name && d.name.toLowerCase().indexOf(term) !== -1);
+        renderDirectors(filtered);
+        document.getElementById('directorList').style.display = 'block';
+    }, 50);
+}
+function addDirector(id, name) {
+    if (!selectedDirectorIds.find(d => d.id === id)) {
+        selectedDirectorIds.push({id, name});
+        document.getElementById('selectedDirectors').innerHTML += `<span class="tag">${name} <span class="remove-tag" onclick="removeDirector('${id}')">&times;</span></span>`;
+    }
+    document.getElementById('directorSearch').value = '';
+    document.getElementById('directorList').style.display = 'none';
+}
+function removeDirector(id) {
+    selectedDirectorIds = selectedDirectorIds.filter(x => x.id !== id);
+    document.getElementById('selectedDirectors').innerHTML = selectedDirectorIds.map(d => `<span class="tag">${d.name} <span class="remove-tag" onclick="removeDirector('${d.id}')">&times;</span></span>`).join('');
+}
+
+function predict() {
+    document.querySelectorAll('.error-message').forEach(el => el.remove());
+    let isValid = true;
+    
+    const movieSearch = document.getElementById('movieSearch');
+    const year = document.getElementById('yearSelect');
+    const runtime = document.getElementById('runtimeMinutes');
+
+    if (!selectedTconst) { showError(movieSearch, "Movie is required!"); isValid = false; }
+    if (!year.value) { showError(year, "Year is required!"); isValid = false; }
+    // הבדיקה המעודכנת: רק גדול מ-0
+    if (runtime.value === "" || runtime.value <= 0) { showError(runtime, "Valid runtime (greater than 0) is required!"); isValid = false; }
+    
+    if (!isValid) return;
+
+    let missing = [];
+    if (selectedGenres.length === 0) missing.push("genre");
+    if (selectedDirectorIds.length === 0) missing.push("director");
+    
+    if (missing.length > 0) {
+        let msg = "Are you sure the " + missing.join(" and ") + " is unknown?";
+        if (!confirm(msg)) return;
+    }
+    
+    fetch('/predict', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            tconst: selectedTconst,
+            startYear: year.value,
+            runtimeMinutes: runtime.value,
+            genres: selectedGenres.join(','),
+            directors: selectedDirectorIds.map(d=>d.id).join(',')
+        })
+    })
+    .then(r => r.ok ? r.json() : r.json().then(e => { throw new Error(e.error); }))
+    .then(res => {
+        document.getElementById('result').innerText = "Predicted Rating: " + res.predicted_rating.toFixed(3) + "/10";
+        document.getElementById('predictBtn').style.display = 'none';
+        document.getElementById('resetBtn').style.display = 'block';
+    })
+    .catch(err => {
+        document.getElementById('result').style.color = "red";
+        document.getElementById('result').innerText = "Error: " + err.message;
+    });
+}
+
+function showError(el, msg) {
+    const err = document.createElement('span');
+    err.className = 'error-message';
+    err.innerText = msg;
+    el.parentNode.insertBefore(err, el.nextSibling);
+}
+</script>
+</body>
+</html>
