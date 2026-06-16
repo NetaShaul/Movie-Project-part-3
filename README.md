@@ -118,7 +118,7 @@ Example response:
 
 The application includes validation and error handling on the backend.
 
-- 400 Bad Request - Returned when input data is missing or invalid (for example, missing fields, incorrect data types)
+- 400 Bad Request - Returned when input data is missing or invalid . for example, missing fields, incorrect data types.
 - 500 Internal Server Error - Returned for unexpected errors during processing or prediction
 
 All errors are returned as JSON responses and are displayed to the user in the frontend.
