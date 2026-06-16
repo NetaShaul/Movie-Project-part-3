@@ -77,12 +77,11 @@ http://localhost:5000
 
 ## 5. Input Fields
 
-- Movie Name – text (e.g. "Inception")
-- Release Year – numeric (1890–2026)
-- Runtime – numeric (must be > 0)
-- Genres – optional (e.g. "Action,Drama")
-- Directors – optional (e.g. "nm123456")
-
+- Movie Name – string (English letters, required)
+- Release Year – integer (1890–2026, required)
+- Runtime – float (>0, required)
+- Genres – comma-separated string (optional, default: Unknown)
+- Directors – comma-separated IDs (optional)
 ---
 
 ## 6. Prediction Flow
@@ -98,7 +97,7 @@ http://localhost:5000
 Example response:
 
 {
-  "predicted_rating": 7.4/10
+  "predicted_rating": 7.4
 }
 
 ---
@@ -117,17 +116,22 @@ Example response:
 
 ## 8. Error Handling
 
-- 400 Bad Request → Missing or invalid input  
-- 500 Internal Server Error → Unexpected error  
+The application includes validation and error handling on the backend.
 
-Errors are returned as JSON and displayed on the page.
+- 400 Bad Request - Returned when input data is missing or invalid (for example, missing fields, incorrect data types)
+- 500 Internal Server Error - Returned for unexpected errors during processing or prediction
+
+All errors are returned as JSON responses and are displayed to the user in the frontend.
 
 ---
 
 ## 9. API Endpoints
 
-GET / → Loads index.html  
-POST /predict → Returns predicted rating  
+- GET / → Loads index.html  
+- POST /predict → Returns predicted rating  
+- GET /get_genres → Returns available genres  
+- GET /get_directors → Returns available directors  
+- POST /check_movie → Suggests matching movies  
 
 ## Final Notes
 
